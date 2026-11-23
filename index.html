@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>하늘까지 탑 쌓기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: 화면 전체가 하늘(캔버스) · 점수는 위 가운데 · 문제와 결과는 아래에서 올라오는 패널 */
+  --ink:#1b2140;
+  --muted:#5b6487;
+  --panel:#fffdf6;
+  --sun:#ffc93c;
+  --line:rgba(27,33,64,.16);
+  --good:#2f9e6b;
+  --bad:#e0564f;
+  --hud:#1b2140;
+  --font-display:"Bagel Fat One","Black Han Sans",system-ui,sans-serif;
+  --font-body:"Gowun Dodum","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  color-scheme:light;
+}
+body.night{--hud:#ffffff}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none !important}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:#78c4f0;font-family:var(--font-body);color:var(--ink);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
+button{font-family:var(--font-body)}
+button:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
+
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 22px) 72px 0;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;color:var(--hud);transition:opacity .35s,color .6s}
+.hud.hidden{opacity:0}
+.score{font-family:var(--font-display);font-size:clamp(60px,17vw,88px);line-height:.95;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:4px}
+.score small{font-size:.3em}
+#score{display:inline-block}
+#score.bump{animation:bump .22s ease-out}
+.meta{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;font-size:14px}
+.pill{padding:4px 11px;border-radius:999px;background:rgba(255,255,255,.5);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill.quizpill{background:var(--sun);color:var(--ink)}
+body.night .pill{background:rgba(255,255,255,.14)}
+body.night .pill.quizpill{background:var(--sun);color:var(--ink)}
+
+.icon-btn{position:fixed;top:calc(env(safe-area-inset-top) + 16px);right:calc(env(safe-area-inset-right) + 16px);width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.6);color:var(--ink);display:grid;place-items:center;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);z-index:8}
+
+/* 시작 화면 */
+.intro{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 22px);color:var(--ink);transition:opacity .4s,visibility 0s}
+.intro.hidden{opacity:0;visibility:hidden;transition:opacity .4s,visibility 0s .4s}
+.intro-top{text-align:center}
+.kicker{display:inline-block;font-size:14px;letter-spacing:.04em;color:var(--ink);background:rgba(255,255,255,.55);padding:4px 12px;border-radius:999px}
+.intro h1{font-family:var(--font-display);font-weight:400;font-size:clamp(44px,13vw,74px);line-height:1.02;letter-spacing:-.01em;text-wrap:balance;margin-top:10px}
+.intro-bottom{width:100%;display:flex;flex-direction:column;gap:10px;align-items:center}
+.setup{pointer-events:auto;width:100%;max-width:420px;background:rgba(255,253,246,.94);border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 12px 40px rgba(27,33,64,.16)}
+.how{font-size:15px;line-height:1.5;word-break:keep-all}
+.setup-row{display:flex;flex-direction:column;gap:6px}
+.setup-label{font-size:13px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{height:38px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:15px;cursor:pointer}
+.chip[aria-checked="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.start-btn{height:56px;border:0;border-radius:18px;background:var(--ink);color:#fff;font-family:var(--font-display);font-size:21px;cursor:pointer}
+.best-line{font-size:14px;color:var(--ink);background:rgba(255,255,255,.65);padding:3px 12px;border-radius:999px}
+
+/* 알림 */
+.perfect{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 246px);transform:translateX(-50%);font-family:var(--font-display);font-size:22px;color:var(--ink);background:var(--sun);padding:6px 16px;border-radius:999px;opacity:0;pointer-events:none;white-space:nowrap;box-shadow:0 6px 18px rgba(27,33,64,.18);z-index:7}
+.perfect.pop{animation:pop .9s ease-out forwards}
+.banner{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 190px);transform:translate(-50%,-10px);background:var(--ink);color:#fff;padding:11px 18px;border-radius:16px;font-size:15px;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;box-shadow:0 10px 30px rgba(10,14,40,.3);z-index:7}
+.banner b{font-family:var(--font-display);font-weight:400;color:var(--sun);margin-right:2px}
+.banner.show{opacity:1;transform:translate(-50%,0)}
+
+/* 아래에서 올라오는 패널: 문제, 결과 */
+.panel{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);width:min(460px,calc(100% - 24px));max-height:calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);overflow-y:auto;transform:translate(-50%,calc(100% + 40px));visibility:hidden;background:var(--panel);border-radius:28px;padding:20px 18px 18px;box-shadow:0 20px 60px rgba(10,14,40,.35);display:flex;flex-direction:column;gap:14px;transition:transform .45s cubic-bezier(.2,.9,.25,1.08),visibility 0s .45s;z-index:6}
+.panel.show{transform:translate(-50%,0);visibility:visible;transition:transform .45s cubic-bezier(.2,.9,.25,1.08),visibility 0s}
+
+.quiz-head{display:flex;align-items:center;gap:8px}
+.tag{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--sun);color:var(--ink);white-space:nowrap}
+.quiz-count{font-size:13px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.read-btn{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:14px;cursor:pointer;white-space:nowrap}
+.quiz-q{font-size:21px;line-height:1.45;text-wrap:balance;word-break:keep-all}
+.quiz-ex{font-size:20px;line-height:1.5;text-align:center;padding:12px;border-radius:16px;background:rgba(255,201,60,.2);border:1.5px dashed rgba(27,33,64,.25);word-break:keep-all;font-variant-numeric:tabular-nums}
+.quiz-fig{display:flex;justify-content:center}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choices.one{grid-template-columns:1fr}
+.choice{min-height:58px;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:16px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:18px;line-height:1.35;text-align:left;cursor:pointer;word-break:keep-all;transition:background .2s,opacity .2s}
+.choices.one .choice{min-height:50px;font-size:16.5px}
+.choice .num{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:rgba(27,33,64,.08)}
+.choice.right{background:var(--good);border-color:var(--good);color:#fff}
+.choice.wrong{background:var(--bad);border-color:var(--bad);color:#fff}
+.choice.right .num,.choice.wrong .num{background:rgba(255,255,255,.25)}
+.choice.dim{opacity:.45}
+.choice:disabled{cursor:default}
+.quiz-why{font-size:15.5px;line-height:1.6;padding:12px 14px;border-radius:16px;background:rgba(27,33,64,.05);word-break:keep-all}
+.res{font-family:var(--font-display);font-size:17px;margin-right:8px}
+.res.good{color:var(--good)}
+.res.bad{color:var(--bad)}
+.wide{height:54px;border:0;border-radius:18px;background:var(--ink);color:#fff;font-family:var(--font-display);font-size:19px;cursor:pointer}
+
+.sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.eyebrow{font-size:13px;color:var(--muted)}
+.final{font-family:var(--font-display);font-size:60px;line-height:.95;font-variant-numeric:tabular-nums;margin-top:4px}
+.final small{font-size:.34em;margin-left:3px}
+.final-alt{font-size:15px;margin-top:6px}
+.badge{font-family:var(--font-display);font-size:14px;background:var(--sun);padding:6px 12px;border-radius:999px;transform:rotate(-5deg);white-space:nowrap}
+.ladder{list-style:none;display:flex;flex-wrap:wrap;gap:6px}
+.ladder li{font-size:12.5px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);display:flex;gap:5px;white-space:nowrap}
+.ladder li span{font-variant-numeric:tabular-nums;opacity:.75}
+.ladder li.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.ladder li.next{border:1.5px dashed var(--ink);color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats div{background:rgba(27,33,64,.05);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.stats span{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.stats b{font-family:var(--font-display);font-weight:400;font-size:21px;font-variant-numeric:tabular-nums}
+.revive{height:52px;border:0;border-radius:18px;background:var(--sun);color:var(--ink);font-family:var(--font-display);font-size:17px;cursor:pointer}
+.actions{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+.actions button{height:54px;border-radius:18px;font-family:var(--font-display);font-size:18px;cursor:pointer;border:0}
+.actions .primary{background:var(--ink);color:#fff}
+.actions .ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+
+@keyframes bump{0%{transform:scale(1.16)}100%{transform:scale(1)}}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,8px) scale(.8)}15%{opacity:1;transform:translate(-50%,0) scale(1.06)}30%{transform:translate(-50%,0) scale(1)}75%{opacity:1;transform:translate(-50%,-4px)}100%{opacity:0;transform:translate(-50%,-14px)}}
+@keyframes fade{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){
+  .perfect.pop{animation:fade .9s forwards}
+  .panel,.panel.show,.banner{transition:visibility 0s}
+}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="탑 쌓기 게임 화면. 화면을 탭하거나 스페이스 키를 눌러 블록을 내려놓아요."></canvas>
+
+<div class="hud hidden" id="hud">
+  <div class="score"><span id="score">0</span><small>층</small></div>
+  <div class="meta">
+    <span class="pill" id="alt">0m</span>
+    <span class="pill" id="next">첨성대까지 1층</span>
+    <span class="pill quizpill" id="quizPill">문제까지 3층</span>
+  </div>
+</div>
+
+<button class="icon-btn" id="mute" type="button" aria-label="소리 끄기"></button>
+
+<div class="intro" id="intro">
+  <header class="intro-top">
+    <p class="kicker">한 층 = 10m</p>
+    <h1>하늘까지<br>탑 쌓기</h1>
+  </header>
+  <div class="intro-bottom">
+    <div class="setup">
+      <p class="how">블록을 탭해서 쌓아요. 중간에 나오는 문제를 맞히면 블록이 다시 넓어져요!</p>
+      <div class="setup-row">
+        <span class="setup-label" id="subjLabel">어떤 문제를 풀까요?</span>
+        <div class="chips" role="radiogroup" aria-labelledby="subjLabel">
+          <button class="chip" type="button" role="radio" data-subj="all">모두</button>
+          <button class="chip" type="button" role="radio" data-subj="국어">국어</button>
+          <button class="chip" type="button" role="radio" data-subj="수학">수학</button>
+          <button class="chip" type="button" role="radio" data-subj="통합">통합교과</button>
+        </div>
+      </div>
+      <div class="setup-row">
+        <span class="setup-label" id="everyLabel">문제는 몇 층마다 나올까요?</span>
+        <div class="chips" role="radiogroup" aria-labelledby="everyLabel">
+          <button class="chip" type="button" role="radio" data-every="2">2층</button>
+          <button class="chip" type="button" role="radio" data-every="3">3층</button>
+          <button class="chip" type="button" role="radio" data-every="5">5층</button>
+          <button class="chip" type="button" role="radio" data-every="0">문제 없이</button>
+        </div>
+      </div>
+      <button class="start-btn" id="startBtn" type="button">시작하기</button>
+    </div>
+    <p class="best-line" id="introBest">첫 기록에 도전해 보세요</p>
+  </div>
+</div>
+
+<div class="perfect" id="perfect" aria-hidden="true"></div>
+<div class="banner" id="banner" role="status"><span id="bannerText"></span></div>
+
+<section class="panel quiz" id="quiz" aria-labelledby="quizQ" aria-hidden="true">
+  <div class="quiz-head">
+    <span class="tag" id="quizTag">국어</span>
+    <span class="quiz-count" id="quizCount">3층 문제</span>
+    <button class="read-btn" id="readBtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>읽어 주기</button>
+  </div>
+  <p class="quiz-q" id="quizQ"></p>
+  <div class="quiz-fig" id="quizFig" hidden></div>
+  <p class="quiz-ex" id="quizEx" hidden></p>
+  <div class="choices" id="choices"></div>
+  <p class="quiz-why" id="quizWhy" hidden></p>
+  <button class="wide" id="quizNext" type="button" hidden>계속 쌓기</button>
+</section>
+
+<section class="panel sheet" id="sheet" aria-labelledby="sheetTitle" aria-hidden="true">
+  <div class="sheet-head">
+    <div>
+      <p class="eyebrow" id="sheetTitle">이번 기록</p>
+      <p class="final"><span id="finalFloors">0</span><small>층</small></p>
+      <p class="final-alt" id="finalAlt">0m</p>
+    </div>
+    <span class="badge" id="newBadge" hidden>신기록!</span>
+  </div>
+  <ul class="ladder" id="ladder" aria-label="넘어선 높이"></ul>
+  <div class="stats">
+    <div><span>최고 기록</span><b id="bestOut">0층</b></div>
+    <div><span>맞힌 문제</span><b id="quizOut">0/0</b></div>
+    <div><span>연속 정확</span><b id="comboOut">0번</b></div>
+  </div>
+  <button class="revive" id="reviveBtn" type="button">문제 맞히고 이어서 쌓기</button>
+  <div class="actions">
+    <button class="primary" id="again" type="button">다시 쌓기</button>
+    <button class="ghost" id="copy" type="button">기록 복사</button>
+  </div>
+</section>
+
+<script src="questions.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('game');
+  const ctx = canvas.getContext('2d');
+  const hud = $('hud'), scoreEl = $('score'), altEl = $('alt'), nextEl = $('next'), quizPill = $('quizPill');
+  const intro = $('intro'), introBest = $('introBest');
+  const sheet = $('sheet'), perfectEl = $('perfect'), banner = $('banner'), bannerText = $('bannerText');
+  const quizEl = $('quiz'), quizTag = $('quizTag'), quizCount = $('quizCount'), quizQ = $('quizQ'), quizEx = $('quizEx'), quizFig = $('quizFig');
+  const choicesEl = $('choices'), quizWhy = $('quizWhy'), quizNext = $('quizNext'), readBtn = $('readBtn'), reviveBtn = $('reviveBtn');
+  const muteBtn = $('mute');
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // ---- 규칙 ----
+  const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
+  const BH = 0.24;        // 블록 높이(월드 단위)
+  const BASE = 1;         // 첫 블록 한 변
+  const RANGE = 1.35;     // 블록이 오가는 거리
+  const PERFECT = 0.045;  // 이 안쪽이면 '정확'
+  const GROW = 0.06;      // 연속 정확 3번부터 넓어지는 양
+  const METERS = 10;      // 한 층 = 10m
+
+  const LANDMARKS = [
+    { name: '첨성대', m: 9 },
+    { name: '피사의 사탑', m: 56 },
+    { name: '자유의 여신상', m: 93 },
+    { name: '63빌딩', m: 249 },
+    { name: '에펠탑', m: 330 },
+    { name: '롯데월드타워', m: 555 },
+    { name: '부르즈 할리파', m: 828 },
+    { name: '한라산', m: 1947 },
+  ];
+  // [고도(m), 하늘 위쪽 색, 하늘 아래쪽 색] — 올라갈수록 낮 → 노을 → 밤 → 우주
+  const SKY = [
+    [0,    [120, 196, 240], [226, 244, 255]],
+    [250,  [92, 150, 214],  [255, 222, 170]],
+    [550,  [64, 72, 150],   [255, 150, 120]],
+    [850,  [22, 28, 70],    [110, 66, 128]],
+    [1500, [6, 8, 22],      [26, 32, 78]],
+  ];
+
+  // ---- 문제 은행 (초등 2학년) ----
+  const R = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  // 숫자 뒤 조사: 끝자리 0·1·3·6·7·8은 받침이 있어요(영·일·삼·육·칠·팔, 십·백·천)
+  const jo = (n, withB, noB) => ([0, 1, 3, 6, 7, 8].includes(Math.abs(n) % 10) ? withB : noB);
+
+  // 문제 목록은 questions.js에 있어요.
+  const STATIC = Array.isArray(window.SKY_QUESTIONS) ? window.SKY_QUESTIONS : [];
+  const fromRow = ([s, q, c, why, ex]) => () => ({ s, q, c, why, ex });
+
+  function numChoices(ans, cands, unit = '') {
+    const set = [ans];
+    for (const v of cands) if (v > 0 && !set.includes(v) && set.length < 4) set.push(v);
+    let k = 2;
+    while (set.length < 4) { for (const v of [ans + k, ans - k]) if (v > 0 && !set.includes(v) && set.length < 4) set.push(v); k++; }
+    return set.map((v) => v + unit);
+  }
+  function pickDistinct(right, cands) {
+    const out = [right];
+    for (const c of cands) if (!out.includes(c) && out.length < 4) out.push(c);
+    return out;
+  }
+  function clockSVG(h, m) {
+    let s = '<svg viewBox="0 0 120 120" width="132" height="132" role="img" aria-label="바늘이 있는 시계">';
+    s += '<circle cx="60" cy="60" r="56" fill="#fff" stroke="#1b2140" stroke-width="3"/>';
+    for (let i = 0; i < 60; i++) {
+      if (i % 5 === 0) continue;
+      const a = i * Math.PI / 30;
+      s += `<line x1="${(60 + 51.5 * Math.sin(a)).toFixed(1)}" y1="${(60 - 51.5 * Math.cos(a)).toFixed(1)}" x2="${(60 + 54 * Math.sin(a)).toFixed(1)}" y2="${(60 - 54 * Math.cos(a)).toFixed(1)}" stroke="#9aa0b8" stroke-width="1"/>`;
+    }
+    for (let i = 1; i <= 12; i++) {
+      const a = i * Math.PI / 6;
+      s += `<text x="${(60 + 43 * Math.sin(a)).toFixed(1)}" y="${(60 - 43 * Math.cos(a)).toFixed(1)}" font-size="13" text-anchor="middle" dominant-baseline="central" fill="#1b2140" font-family="sans-serif">${i}</text>`;
+    }
+    const ha = ((h % 12) + m / 60) * Math.PI / 6, ma = m * Math.PI / 30;
+    s += `<line x1="60" y1="60" x2="${(60 + 26 * Math.sin(ha)).toFixed(1)}" y2="${(60 - 26 * Math.cos(ha)).toFixed(1)}" stroke="#1b2140" stroke-width="5.5" stroke-linecap="round"/>`;
+    s += `<line x1="60" y1="60" x2="${(60 + 41 * Math.sin(ma)).toFixed(1)}" y2="${(60 - 41 * Math.cos(ma)).toFixed(1)}" stroke="#e0564f" stroke-width="3.2" stroke-linecap="round"/>`;
+    s += '<circle cx="60" cy="60" r="4" fill="#1b2140"/></svg>';
+    return s;
+  }
+  function shapeSVG(n) {
+    let inner;
+    if (!n) inner = '<circle cx="60" cy="60" r="44"/>';
+    else {
+      const rot = n === 4 ? Math.PI / 4 : 0, pts = [];
+      for (let i = 0; i < n; i++) { const a = rot + i * 2 * Math.PI / n; pts.push(`${(60 + 46 * Math.sin(a)).toFixed(1)},${(63 - 46 * Math.cos(a)).toFixed(1)}`); }
+      inner = `<polygon points="${pts.join(' ')}"/>`;
+    }
+    return `<svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="도형"><g fill="#ffc93c" stroke="#1b2140" stroke-width="3" stroke-linejoin="round">${inner}</g></svg>`;
+  }
+
+  const MATH_GEN = [
+    () => { // 받아올림 있는 덧셈
+      let a, b; do { a = R(15, 68); b = R(12, 49); } while ((a % 10) + (b % 10) < 10 || a + b > 99);
+      const ans = a + b, ones = (a % 10) + (b % 10);
+      return { s: '수학', q: '계산해 보세요.', ex: `${a} + ${b} = (    )`, c: numChoices(ans, [ans - 10, ans + 10, ans + 1]),
+        why: `일의 자리끼리 더하면 ${ones}${jo(ones, '이', '가')} 되어 10을 십의 자리로 받아올려요. 답은 ${ans}${jo(ans, '이에요', '예요')}.` };
+    },
+    () => { // 받아내림 있는 뺄셈
+      let a, b; do { a = R(31, 95); b = R(12, a - 10); } while ((a % 10) >= (b % 10));
+      const ans = a - b;
+      return { s: '수학', q: '계산해 보세요.', ex: `${a} − ${b} = (    )`, c: numChoices(ans, [ans + 10, ans - 10, ans + 1]),
+        why: `일의 자리 ${a % 10}에서 ${b % 10}${jo(b % 10, '을', '를')} 뺄 수 없으니 십의 자리에서 10을 받아내려요. 답은 ${ans}${jo(ans, '이에요', '예요')}.` };
+    },
+    () => { // 곱셈구구
+      const a = R(2, 9), b = R(2, 9), ans = a * b;
+      return { s: '수학', q: '곱셈구구를 해 보세요.', ex: `${a} × ${b} = (    )`, c: numChoices(ans, [a * (b + 1), a * (b - 1), (a + 1) * b]),
+        why: `${a}단에서 ${a} × ${b} = ${ans}${jo(ans, '이에요', '예요')}.` };
+    },
+    () => { // 묶어 세기 문장제
+      const a = R(2, 9), b = R(2, 6), ans = a * b;
+      const [s1, s2, box, u] = [['사탕이', '사탕은', '봉지', '개'], ['연필이', '연필은', '묶음', '자루'], ['딸기가', '딸기는', '접시', '개'], ['구슬이', '구슬은', '상자', '개']][R(0, 3)];
+      return { s: '수학', q: `${s1} 한 ${box}에 ${a}${u}씩 ${b}${box} 있어요. ${s2} 모두 몇 ${u}일까요?`, c: numChoices(ans, [ans + a, ans - a, a + b], u),
+        why: `${a}씩 ${b}묶음이니 ${a} × ${b} = ${ans}${jo(ans, '이에요', '예요')}.` };
+    },
+    () => { // 자릿값
+      const len = R(3, 4); let d; do { d = Array.from({ length: len }, () => R(1, 9)); } while (new Set(d).size < len);
+      const pos = R(0, len - 2), digit = d[pos], place = len - 1 - pos, ans = digit * 10 ** place;
+      const names = ['일', '십', '백', '천'];
+      return { s: '수학', q: `${d.join('')}에서 숫자 ${digit}${jo(digit, '은', '는')} 얼마를 나타낼까요?`,
+        c: [ans, ...[digit, digit * 10, digit * 100, digit * 1000].filter((v) => v !== ans)].map(String),
+        why: `${digit}${jo(digit, '은', '는')} ${names[place]}의 자리 숫자라서 ${ans}${jo(ans, '을', '를')} 나타내요.` };
+    },
+    () => { // 길이 단위
+      const m = R(1, 4), cm = R(11, 95), ans = m * 100 + cm;
+      return { s: '수학', q: `${m}m ${cm}cm는 몇 cm일까요?`, c: [ans, m * 10 + cm, m + cm, m * 1000 + cm].map((v) => v + 'cm'),
+        why: `1m는 100cm예요. ${m}m는 ${m * 100}cm이니 ${cm}cm를 더하면 ${ans}cm예요.` };
+    },
+    () => { // 시각 읽기
+      const h = R(1, 12), n = R(1, 11), min = n * 5, h2 = h % 12 + 1;
+      const right = `${h}시 ${min}분`;
+      return { s: '수학', q: '시계가 나타내는 시각은 몇 시 몇 분일까요?', fig: clockSVG(h, min),
+        c: pickDistinct(right, [`${h2}시 ${min}분`, `${h}시 ${n}분`, `${n}시 ${h * 5 === 60 ? 55 : h * 5}분`, `${h}시 ${min >= 30 ? min - 15 : min + 15}분`, `${h2}시 ${n}분`]),
+        why: `긴바늘(빨간색)이 ${n}${jo(n, '을', '를')} 가리키면 ${min}분, 짧은바늘이 ${h}${jo(h, '과', '와')} ${h2} 사이에 있으면 ${h}시예요.` };
+    },
+    () => { // 도형 이름
+      const shapes = [[3, '삼각형'], [4, '사각형'], [5, '오각형'], [6, '육각형'], [0, '원']];
+      const [n, name] = shapes[R(0, 4)];
+      return { s: '수학', q: '이 도형의 이름은 무엇일까요?', fig: shapeSVG(n),
+        c: [name, ...shuffle(shapes.filter((x) => x[1] !== name).map((x) => x[1])).slice(0, 3)],
+        why: n ? `변이 ${n}개, 꼭짓점이 ${n}개인 도형은 ${name}이에요.` : '곧은 선도 꼭짓점도 없이 둥근 도형은 원이에요.' };
+    },
+    () => { // 규칙 찾기
+      const s = R(1, 20), st = R(2, 5), seq = [0, 1, 2, 3].map((i) => s + i * st), ans = s + 4 * st;
+      return { s: '수학', q: '규칙에 따라 빈칸에 알맞은 수는?', ex: `${seq.join(', ')}, (    )`, c: numChoices(ans, [ans + st, ans - 1, ans + 1]),
+        why: `${st}씩 커지는 규칙이에요. ${seq[3]} + ${st} = ${ans}` };
+    },
+    () => { // 수의 크기 비교
+      const h = R(2, 8), set = new Set();
+      while (set.size < 3) set.add(h * 100 + R(10, 99));
+      set.add((h - 1) * 100 + R(90, 99));
+      const arr = [...set], max = Math.max(...arr);
+      return { s: '수학', q: '가장 큰 수는 무엇일까요?', c: [max, ...arr.filter((v) => v !== max)].map(String),
+        why: `백의 자리부터 비교하고, 같으면 십의 자리, 그다음 일의 자리를 비교해요. 가장 큰 수는 ${max}${jo(max, '이에요', '예요')}.` };
+    },
+    () => { // 덧셈 문장제
+      const a = R(18, 45), b = R(7, 29), ans = a + b;
+      return { s: '수학', q: `운동장에 학생 ${a}명이 있었는데 ${b}명이 더 왔어요. 학생은 모두 몇 명일까요?`, c: numChoices(ans, [ans - 10, ans + 10, a - b], '명'),
+        why: `더 왔으니 덧셈을 해요. ${a} + ${b} = ${ans}` };
+    },
+    () => { // 뺄셈 문장제
+      const a = R(30, 60), b = R(8, 25), ans = a - b;
+      return { s: '수학', q: `색종이 ${a}장 중에서 ${b}장을 썼어요. 남은 색종이는 몇 장일까요?`, c: numChoices(ans, [a + b, ans + 10, ans - 10], '장'),
+        why: `쓰고 남은 것을 구하니 뺄셈을 해요. ${a} − ${b} = ${ans}` };
+    },
+  ];
+  const KOR = STATIC.filter((r) => r[0] === '국어').map(fromRow);
+  const MATH = [...STATIC.filter((r) => r[0] === '수학').map(fromRow), ...MATH_GEN];
+  const INTEG = STATIC.filter((r) => r[0] !== '국어' && r[0] !== '수학').map(fromRow);
+
+  // ---- 상태 ----
+  let W = 0, H = 0, DPR = 1, unit = 100;
+  let state = 'ready'; // ready · playing · quiz-wait · quiz · over
+  let stack = [], current = null, debris = [], rings = [];
+  let score = 0, combo = 0, maxCombo = 0, best = 0, hue0 = 200, landmarkIdx = 0;
+  let skyM = 0, shake = 0, overAt = 0, time = 0, last = 0, isNight = false;
+  let quizTotal = 0, quizRight = 0, reviveUsed = false, pendingSpawn = 0, gameStartBest = 0;
+  let curQ = null, order = [], answered = false, lastOk = false, quizMode = 'floor', bag = [];
+  const cam = { y: BH, ty: BH, s: 1, ts: 1, a: 0.45, ta: 0.45 };
+  let stars = [], clouds = [];
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const mix = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)));
+  const hueAt = (i) => (hue0 + i * 9) % 360;
+  const speed = () => state === 'ready' ? 1.25 : Math.min(1.7 + score * 0.04, 3.8);
+
+  // ---- 저장 ----
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} },
+  };
+  let muted = store.get('sky-stack-muted', '0') === '1';
+  let subj = store.get('sky-stack-subj', 'all');
+  let quizEvery = +store.get('sky-stack-every', '3');
+  if (!['all', '국어', '수학', '통합'].includes(subj)) subj = 'all';
+  if (![0, 2, 3, 5].includes(quizEvery)) quizEvery = 3;
+
+  function poolFor() { return subj === '국어' ? KOR : subj === '수학' ? MATH : subj === '통합' ? INTEG : [...KOR, ...MATH, ...INTEG]; }
+  function nextQuestion() { if (!bag.length) bag = shuffle(poolFor()); return bag.pop()(); }
+
+  // ---- 소리 ----
+  let actx = null;
+  function ensureAudio() {
+    if (muted) return;
+    try {
+      if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; actx = new AC(); }
+      if (actx.state === 'suspended') actx.resume().catch(() => {});
+    } catch (e) { actx = null; }
+  }
+  function tone(f, d, type, v, when = 0) {
+    if (!actx || muted) return;
+    try {
+      const t = actx.currentTime + when;
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + d + 0.03);
+    } catch (e) {}
+  }
+  const note = (n) => 523.25 * Math.pow(2, n / 12);
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+  const sfxPlace = () => { tone(196, 0.1, 'triangle', 0.2); tone(392, 0.05, 'sine', 0.05); };
+  const sfxPerfect = (c) => { const f = note(PENTA[Math.min(c - 1, PENTA.length - 1)]); tone(f, 0.24, 'sine', 0.17); tone(f * 2, 0.12, 'triangle', 0.04); };
+  const sfxLandmark = () => [0, 4, 7, 12].forEach((n, i) => tone(note(n), 0.2, 'triangle', 0.08, 0.18 + i * 0.07));
+  const sfxOver = () => { tone(220, 0.22, 'square', 0.04); tone(147, 0.45, 'triangle', 0.14, 0.1); };
+  const sfxQuiz = () => { tone(note(7), 0.15, 'sine', 0.1); tone(note(12), 0.2, 'sine', 0.1, 0.1); };
+  const sfxRight = () => [0, 4, 7, 12, 16].forEach((n, i) => tone(note(n), 0.18, 'triangle', 0.1, i * 0.06));
+  const sfxWrong = () => { tone(262, 0.18, 'triangle', 0.12); tone(208, 0.3, 'triangle', 0.12, 0.14); };
+  const sfxGrow = () => { tone(note(0), 0.12, 'sine', 0.08); tone(note(7), 0.12, 'sine', 0.08, 0.08); tone(note(12), 0.22, 'sine', 0.1, 0.16); };
+  function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+
+  const ICON_ON = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  const ICON_OFF = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5z" fill="currentColor"/><path d="m16 9 6 6M22 9l-6 6"/></svg>';
+  function renderMute() { muteBtn.innerHTML = muted ? ICON_OFF : ICON_ON; muteBtn.setAttribute('aria-label', muted ? '소리 켜기' : '소리 끄기'); }
+  muteBtn.addEventListener('click', () => {
+    muted = !muted; store.set('sky-stack-muted', muted ? '1' : '0'); renderMute();
+    if (!muted) ensureAudio(); else stopSpeech();
+  });
+
+  // ---- 읽어 주기 ----
+  const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+  if (!canSpeak) readBtn.hidden = true;
+  function stopSpeech() { try { if (canSpeak) speechSynthesis.cancel(); } catch (e) {} }
+  const spoken = (t) => String(t).replace(/\(\s*\)/g, ' 빈칸 ').replace(/−/g, ' 빼기 ').replace(/\+/g, ' 더하기 ').replace(/×/g, ' 곱하기 ').replace(/=/g, ' 는 ').replace(/[\[\]]/g, '');
+  readBtn.addEventListener('click', () => {
+    if (!curQ || !canSpeak) return;
+    try {
+      speechSynthesis.cancel();
+      const parts = [curQ.q];
+      if (curQ.ex) parts.push(curQ.ex);
+      order.forEach((oi, i) => parts.push(`${i + 1}번, ${curQ.c[oi]}`));
+      const u = new SpeechSynthesisUtterance(spoken(parts.join('. ')));
+      u.lang = 'ko-KR'; u.rate = 0.9;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  });
+
+  // ---- 화면 ----
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    unit = Math.min(W * 0.27, H * 0.17, 170);
+  }
+  function makeSky() {
+    stars = Array.from({ length: 150 }, () => ({ x: Math.random(), y: Math.random(), r: Math.random() < 0.85 ? 1 : 1.8, tw: 1 + Math.random() * 2.5, ph: Math.random() * 6.28 }));
+    clouds = Array.from({ length: 38 }, (_, i) => ({ y: 1.0 + i * 1.9 + Math.random() * 0.9, x: Math.random(), r: 0.55 + Math.random() * 0.65, v: (0.004 + Math.random() * 0.01) * (Math.random() < 0.5 ? -1 : 1) }));
+  }
+  function skyAt(m) {
+    for (let i = 0; i < SKY.length - 1; i++) {
+      const [m0, t0, b0] = SKY[i], [m1, t1, b1] = SKY[i + 1];
+      if (m <= m1) { const t = clamp((m - m0) / (m1 - m0), 0, 1); return [mix(t0, t1, t), mix(b0, b1, t)]; }
+    }
+    const l = SKY[SKY.length - 1]; return [l[1], l[2]];
+  }
+
+  // 등각 투영: 월드 (x, y, z) → 화면 좌표
+  function P(x, y, z) {
+    const s = unit * cam.s;
+    return [W / 2 + (x - z) * C30 * s, H * cam.a + ((x + z) * S30 - (y - cam.y)) * s];
+  }
+  function poly(pts, fill) {
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+    ctx.strokeStyle = fill; ctx.lineWidth = 0.6; ctx.stroke();
+  }
+  function drawBox(b, y0, h, alpha = 1) {
+    const { x, z, w, d, hue } = b, yt = y0 + h;
+    const x0 = x - w / 2, x1 = x + w / 2, z0 = z - d / 2, z1 = z + d / 2;
+    const t1 = P(x0, yt, z0), t2 = P(x1, yt, z0), t3 = P(x1, yt, z1), t4 = P(x0, yt, z1);
+    const b2 = P(x1, y0, z0), b3 = P(x1, y0, z1), b4 = P(x0, y0, z1);
+    ctx.globalAlpha = alpha;
+    poly([t2, t3, b3, b2], `hsl(${hue},58%,54%)`);
+    poly([t4, t3, b3, b4], `hsl(${hue},55%,41%)`);
+    poly([t1, t2, t3, t4], `hsl(${hue},64%,71%)`);
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(t4[0], t4[1]); ctx.lineTo(t3[0], t3[1]); ctx.lineTo(t2[0], t2[1]); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  function rr(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function puff(x, y, rx, ry) { ctx.moveTo(x + rx, y); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); }
+
+  function drawClouds(dt) {
+    const s = unit * cam.s, a = clamp(0.85 - (skyM - 450) / 700, 0.12, 0.85);
+    ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+    for (const c of clouds) {
+      if (!reduceMotion) { c.x += c.v * dt; if (c.x > 1.25) c.x = -0.25; if (c.x < -0.25) c.x = 1.25; }
+      const r = c.r * unit * 0.42 * (0.6 + 0.4 * cam.s);
+      const sy = H * cam.a - (c.y - cam.y) * s * 0.6;
+      if (sy < -r * 2 || sy > H + r * 2) continue;
+      const sx = c.x * W;
+      ctx.beginPath();
+      puff(sx, sy, r * 1.7, r * 0.5); puff(sx - r * 0.55, sy - r * 0.28, r * 0.75, r * 0.55); puff(sx + r * 0.4, sy - r * 0.38, r * 0.9, r * 0.7);
+      ctx.fill();
+    }
+  }
+  const landmarkY = (L) => (L.m / METERS + 1) * BH;
+  function drawLandmarks() {
+    const s = unit * cam.s, night = skyM > 450;
+    ctx.font = '13px "Gowun Dodum", "Apple SD Gothic Neo", sans-serif';
+    ctx.textBaseline = 'middle';
+    LANDMARKS.forEach((L, i) => {
+      const y = H * cam.a - (landmarkY(L) - cam.y) * s;
+      if (y < -30 || y > H + 30) return;
+      const passed = i < landmarkIdx;
+      ctx.strokeStyle = night ? `rgba(255,255,255,${passed ? 0.25 : 0.55})` : `rgba(27,33,64,${passed ? 0.22 : 0.45})`;
+      ctx.lineWidth = 1.5; ctx.setLineDash(passed ? [] : [5, 6]);
+      ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke(); ctx.setLineDash([]);
+      const label = `${L.name} ${L.m.toLocaleString()}m`;
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = night ? 'rgba(12,16,44,.6)' : 'rgba(255,255,255,.75)';
+      rr(16, y - 27, tw + 18, 22, 11); ctx.fill();
+      ctx.fillStyle = night ? '#ffffff' : '#1b2140';
+      ctx.fillText(label, 25, y - 16);
+    });
+  }
+  function drawRings() {
+    for (const r of rings) {
+      const t = r.t / 0.6, k = 1 + t * 0.55, a = (1 - t) * 0.95;
+      const x0 = r.x - r.w * k / 2, x1 = r.x + r.w * k / 2, z0 = r.z - r.d * k / 2, z1 = r.z + r.d * k / 2;
+      const p = [P(x0, r.y, z0), P(x1, r.y, z0), P(x1, r.y, z1), P(x0, r.y, z1)];
+      ctx.strokeStyle = `rgba(255,255,255,${a.toFixed(3)})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(p[0][0], p[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(p[i][0], p[i][1]);
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+  const debrisAlpha = (d) => clamp(1 - (d.life - 0.6) / 1.0, 0, 1);
+
+  function render(dt) {
+    const [top, bot] = skyAt(skyM);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, `rgb(${top})`); g.addColorStop(1, `rgb(${bot})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    const starA = clamp((skyM - 550) / 700, 0, 1);
+    if (starA > 0) {
+      for (const st of stars) {
+        const tw = reduceMotion ? 0.8 : 0.55 + 0.45 * Math.sin(time * st.tw + st.ph);
+        ctx.fillStyle = `rgba(255,255,255,${(starA * tw).toFixed(3)})`;
+        const y = (st.y * H + cam.y * unit * 0.06) % H;
+        ctx.fillRect(st.x * W, y, st.r, st.r);
+      }
+    }
+    drawClouds(dt);
+
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * 10 * shake, (Math.random() - 0.5) * 10 * shake);
+    if (state !== 'ready') drawLandmarks();
+    const topB = stack[stack.length - 1], ref = topB.x + topB.z;
+    for (const d of debris) if (d.x + d.z < ref) drawBox(d, d.y, BH, debrisAlpha(d));
+    drawBox(stack[0], -400, 400 + BH);
+    const s = unit * cam.s;
+    for (let i = 1; i < stack.length; i++) {
+      const b = stack[i], y0 = i * BH;
+      const minY = H * cam.a + ((b.x + b.z) * S30 - (b.w + b.d) * S30 * 0.5 - (y0 + BH - cam.y)) * s;
+      if (minY > H + 4) continue;
+      const maxY = H * cam.a + ((b.x + b.z) * S30 + (b.w + b.d) * S30 * 0.5 - (y0 - cam.y)) * s;
+      if (maxY < -4) continue;
+      drawBox(b, y0, BH);
+    }
+    if (current) drawBox(current, current.y, BH);
+    for (const d of debris) if (d.x + d.z >= ref) drawBox(d, d.y, BH, debrisAlpha(d));
+    drawRings();
+    ctx.restore();
+  }
+
+  function update(dt) {
+    if (current && (state === 'playing' || state === 'ready')) {
+      const top = stack[stack.length - 1], p = current.axis;
+      current[p] += current.dir * speed() * dt;
+      if (current[p] > top[p] + RANGE) { current[p] = top[p] + RANGE; current.dir = -1; }
+      else if (current[p] < top[p] - RANGE) { current[p] = top[p] - RANGE; current.dir = 1; }
+    }
+    const tb = stack[stack.length - 1];
+    if (tb.grow) {
+      const k2 = 1 - Math.exp(-dt * 9);
+      tb.w += (BASE - tb.w) * k2; tb.d += (BASE - tb.d) * k2;
+      if (BASE - tb.w < 0.003 && BASE - tb.d < 0.003) { tb.w = BASE; tb.d = BASE; tb.grow = false; }
+    }
+    if (pendingSpawn > 0) {
+      pendingSpawn -= dt;
+      if (pendingSpawn <= 0) {
+        pendingSpawn = 0;
+        if (state === 'playing' && !current) { if (tb.grow) { tb.w = BASE; tb.d = BASE; tb.grow = false; } spawn(); }
+      }
+    }
+    for (const d of debris) { d.vy -= 14 * dt; d.y += d.vy * dt; d[d.axis] += d.v * dt; d.life += dt; }
+    debris = debris.filter((d) => d.life < 2 && d.y > cam.y - 30);
+    for (const r of rings) r.t += dt;
+    rings = rings.filter((r) => r.t < 0.6);
+    const k = 1 - Math.exp(-dt * 5);
+    cam.y += (cam.ty - cam.y) * k; cam.s += (cam.ts - cam.s) * k; cam.a += (cam.ta - cam.a) * k;
+    skyM += (score * METERS - skyM) * (1 - Math.exp(-dt * 2));
+    if (shake > 0) shake = Math.max(0, shake - dt * 3);
+    const night = skyM > 450;
+    if (night !== isNight) { isNight = night; document.body.classList.toggle('night', night); }
+  }
+
+  // ---- 게임 진행 ----
+  function spawn() {
+    const top = stack[stack.length - 1];
+    const axis = stack.length % 2 === 0 ? 'x' : 'z';
+    const side = Math.random() < 0.5 ? -1 : 1;
+    current = { x: top.x, z: top.z, w: top.w, d: top.d, hue: hueAt(stack.length), axis, dir: -side, y: stack.length * BH };
+    current[axis] = top[axis] + side * RANGE;
+  }
+  function reset() {
+    hue0 = Math.floor(Math.random() * 360);
+    stack = [{ x: 0, z: 0, w: BASE, d: BASE, hue: hueAt(0), y: 0 }];
+    debris = []; rings = []; score = 0; combo = 0; maxCombo = 0; landmarkIdx = 0; shake = 0;
+    quizTotal = 0; quizRight = 0; reviveUsed = false; pendingSpawn = 0; gameStartBest = best;
+    cam.ty = BH; cam.ts = 1; cam.ta = 0.45;
+    spawn();
+  }
+  function showPerfect(text) {
+    perfectEl.textContent = text;
+    perfectEl.classList.remove('pop'); void perfectEl.offsetWidth; perfectEl.classList.add('pop');
+  }
+  let bannerTimer = 0;
+  function showBanner(L) {
+    bannerText.innerHTML = `<b>${L.name}</b> 높이(${L.m.toLocaleString()}m)를 넘었어요`;
+    banner.classList.add('show');
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => banner.classList.remove('show'), 2200);
+  }
+  function updateHud(bump) {
+    const m = score * METERS;
+    scoreEl.textContent = score;
+    altEl.textContent = `${m.toLocaleString()}m`;
+    const L = LANDMARKS[landmarkIdx];
+    nextEl.textContent = L ? `${L.name}까지 ${Math.floor((L.m - m) / METERS) + 1}층` : '한라산보다 높아요';
+    if (quizEvery > 0) { quizPill.hidden = false; quizPill.textContent = `문제까지 ${quizEvery - (score % quizEvery)}층`; }
+    else quizPill.hidden = true;
+    if (bump && !reduceMotion) { scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump'); }
+  }
+
+  function place() {
+    const top = stack[stack.length - 1];
+    const p = current.axis, k = p === 'x' ? 'w' : 'd';
+    const delta = current[p] - top[p], ad = Math.abs(delta), size = current[k];
+
+    if (ad >= size) { // 완전히 빗나감
+      debris.push({ ...current, v: Math.sign(delta) * 0.9, vy: 0, life: 0 });
+      current = null;
+      gameOver();
+      return;
+    }
+    const placed = { ...current };
+    let perfect = false;
+    if (ad <= PERFECT) {
+      perfect = true;
+      placed[p] = top[p];
+      combo++; maxCombo = Math.max(maxCombo, combo);
+      if (combo >= 3) placed[k] = Math.min(BASE, placed[k] + GROW);
+      sfxPerfect(combo); buzz(18);
+      showPerfect(combo >= 2 ? `정확해요 ×${combo}` : '정확해요!');
+    } else {
+      combo = 0;
+      const ns = size - ad, nc = top[p] + delta / 2;
+      placed[k] = ns; placed[p] = nc;
+      const cut = { ...current, axis: p, v: Math.sign(delta) * 0.6, vy: 0, life: 0 };
+      cut[k] = ad; cut[p] = nc + Math.sign(delta) * (ns / 2 + ad / 2);
+      debris.push(cut);
+      sfxPlace(); buzz(8);
+    }
+    const i = stack.length;
+    placed.y = i * BH;
+    stack.push(placed);
+    current = null;
+    score = stack.length - 1;
+    if (perfect) rings.push({ x: placed.x, z: placed.z, w: placed.w, d: placed.d, y: (i + 1) * BH, t: 0 });
+    cam.ty = stack.length * BH;
+
+    const m = score * METERS;
+    let passedNow = null;
+    while (landmarkIdx < LANDMARKS.length && m > LANDMARKS[landmarkIdx].m) { passedNow = LANDMARKS[landmarkIdx]; landmarkIdx++; }
+    if (passedNow) { showBanner(passedNow); sfxLandmark(); }
+    updateHud(true);
+
+    if (quizEvery > 0 && score % quizEvery === 0) {
+      state = 'quiz-wait';
+      setTimeout(() => { if (state === 'quiz-wait') openQuiz('floor'); }, 450);
+    }
+  }
+
+  // ---- 문제 ----
+  function openQuiz(mode) {
+    quizMode = mode; curQ = nextQuestion(); answered = false; lastOk = false;
+    order = shuffle(curQ.c.map((_, i) => i));
+    quizTag.textContent = curQ.s;
+    quizCount.textContent = mode === 'revive' ? '맞히면 이어서 쌓을 수 있어요' : `${score}층 문제`;
+    quizQ.textContent = curQ.q;
+    if (curQ.ex) { quizEx.textContent = curQ.ex; quizEx.hidden = false; } else quizEx.hidden = true;
+    if (curQ.fig) { quizFig.innerHTML = curQ.fig; quizFig.hidden = false; } else { quizFig.innerHTML = ''; quizFig.hidden = true; }
+    choicesEl.classList.toggle('one', curQ.c.some((t) => String(t).length > 7));
+    choicesEl.innerHTML = '';
+    order.forEach((oi, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'choice';
+      const num = document.createElement('span'); num.className = 'num'; num.textContent = i + 1;
+      const txt = document.createElement('span'); txt.textContent = curQ.c[oi];
+      b.append(num, txt);
+      b.addEventListener('click', () => answer(i));
+      choicesEl.appendChild(b);
+    });
+    quizWhy.hidden = true; quizNext.hidden = true;
+    state = 'quiz';
+    if (mode === 'floor') cam.ta = 0.3;
+    quizEl.inert = false; quizEl.setAttribute('aria-hidden', 'false'); quizEl.classList.add('show');
+    quizEl.scrollTop = 0;
+    sfxQuiz();
+  }
+  function answer(i) {
+    if (answered || state !== 'quiz' || i >= order.length) return;
+    answered = true; quizTotal++;
+    stopSpeech();
+    const ok = order[i] === 0;
+    lastOk = ok;
+    [...choicesEl.children].forEach((b, j) => {
+      b.disabled = true;
+      if (order[j] === 0) b.classList.add('right');
+      else if (j === i) b.classList.add('wrong');
+      else b.classList.add('dim');
+    });
+    quizWhy.textContent = '';
+    const res = document.createElement('span');
+    res.className = 'res ' + (ok ? 'good' : 'bad');
+    res.textContent = ok ? '정답이에요!' : '아쉬워요';
+    quizWhy.append(res);
+    if (ok) {
+      quizRight++; sfxRight(); buzz(20);
+      quizWhy.append(quizMode === 'revive' ? '이어서 쌓을 수 있어요.' : '블록이 다시 넓어져요.');
+    } else {
+      sfxWrong(); buzz([20, 30, 20]);
+      const b = document.createElement('b'); b.textContent = curQ.c[0];
+      quizWhy.append('정답: ', b);
+    }
+    quizWhy.append(document.createElement('br'), curQ.why);
+    quizNext.textContent = ok ? (quizMode === 'revive' ? '이어서 쌓기' : '넓혀서 계속 쌓기') : (quizMode === 'revive' ? '결과 보기' : '계속 쌓기');
+    quizWhy.hidden = false; quizNext.hidden = false;
+    try { quizNext.focus({ preventScroll: true }); quizNext.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
+  function hideQuiz() {
+    quizEl.classList.remove('show'); quizEl.setAttribute('aria-hidden', 'true'); quizEl.inert = true;
+  }
+  function growTop() {
+    const t = stack[stack.length - 1];
+    if (t.w < BASE || t.d < BASE) t.grow = true;
+    rings.push({ x: t.x, z: t.z, w: BASE, d: BASE, y: stack.length * BH, t: 0 });
+    sfxGrow();
+  }
+  function closeQuiz() {
+    if (state !== 'quiz' || !answered) return;
+    stopSpeech();
+    hideQuiz();
+    if (quizMode === 'floor') {
+      if (lastOk) growTop();
+      state = 'playing'; cam.ta = 0.45; pendingSpawn = lastOk ? 0.45 : 0.2;
+      updateHud(false);
+    } else {
+      reviveUsed = true;
+      if (lastOk) {
+        growTop();
+        state = 'playing'; cam.ta = 0.45; cam.ts = 1; cam.ty = stack.length * BH; pendingSpawn = 0.6;
+        hud.classList.remove('hidden'); updateHud(false);
+      } else {
+        state = 'over'; showSheet();
+      }
+    }
+  }
+  quizNext.addEventListener('click', closeQuiz);
+
+  // ---- 끝 ----
+  function gameOver() {
+    state = 'over';
+    overAt = performance.now();
+    sfxOver(); buzz([30, 40, 30]);
+    if (!reduceMotion) shake = 1;
+    if (score > best) { best = score; store.set('sky-stack-best', best); }
+    const topY = stack.length * BH;
+    cam.ta = 0.34; cam.ty = topY * 0.5;
+    cam.ts = clamp((H * 0.36) / ((topY + 0.6) * unit), 0.06, 1);
+    hud.classList.add('hidden');
+    banner.classList.remove('show');
+    setTimeout(() => { if (state === 'over') showSheet(); }, 750);
+  }
+  function showSheet() {
+    fillSheet(score > gameStartBest && score > 0);
+    reviveBtn.hidden = reviveUsed || quizEvery === 0;
+    sheet.inert = false; sheet.setAttribute('aria-hidden', 'false'); sheet.classList.add('show');
+    sheet.scrollTop = 0;
+    try { $('again').focus({ preventScroll: true }); } catch (e) {}
+  }
+  function hideSheet() {
+    sheet.classList.remove('show'); sheet.inert = true; sheet.setAttribute('aria-hidden', 'true');
+  }
+  function fillSheet(isNew) {
+    const m = score * METERS;
+    const passed = LANDMARKS.filter((L) => m > L.m);
+    const topL = passed[passed.length - 1];
+    $('finalFloors').textContent = score;
+    $('finalAlt').textContent = topL ? `${m.toLocaleString()}m · ${topL.name}보다 높아요` : `${m}m · 첨성대(9m)부터 넘어 봐요`;
+    $('ladder').innerHTML = LANDMARKS.map((L, i) =>
+      `<li class="${m > L.m ? 'on' : (i === passed.length ? 'next' : '')}">${L.name}<span>${L.m.toLocaleString()}m</span></li>`).join('');
+    $('bestOut').textContent = `${best}층`;
+    $('quizOut').textContent = `${quizRight}/${quizTotal}`;
+    $('comboOut').textContent = `${maxCombo}번`;
+    $('newBadge').hidden = !isNew;
+  }
+  function start() {
+    if (state !== 'ready') return;
+    state = 'playing';
+    gameStartBest = best;
+    intro.classList.add('hidden');
+    hud.classList.remove('hidden');
+    updateHud(false);
+  }
+  function restart() {
+    hideSheet(); hideQuiz(); stopSpeech();
+    reset();
+    cam.y = cam.ty; cam.s = cam.ts; cam.a = cam.ta;
+    state = 'playing';
+    hud.classList.remove('hidden');
+    updateHud(false);
+  }
+  function act() {
+    ensureAudio();
+    if (state === 'ready') { start(); return; }
+    if (state === 'playing' && current) { place(); if (state === 'playing') spawn(); }
+  }
+
+  // ---- 시작 화면 고르기 ----
+  function renderSetup() {
+    document.querySelectorAll('[data-subj]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.subj === subj)));
+    document.querySelectorAll('[data-every]').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.every === quizEvery)));
+  }
+  document.querySelectorAll('[data-subj]').forEach((b) => b.addEventListener('click', () => {
+    subj = b.dataset.subj; store.set('sky-stack-subj', subj); bag = []; renderSetup();
+  }));
+  document.querySelectorAll('[data-every]').forEach((b) => b.addEventListener('click', () => {
+    quizEvery = +b.dataset.every; store.set('sky-stack-every', quizEvery); renderSetup();
+  }));
+  $('startBtn').addEventListener('click', () => { ensureAudio(); start(); });
+
+  // ---- 입력 ----
+  window.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest && e.target.closest('button, .panel, .setup')) return;
+    act();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (state === 'quiz' && /^[1-4]$/.test(e.key)) { e.preventDefault(); answer(+e.key - 1); return; }
+    if (e.code !== 'Space' && e.code !== 'Enter') return;
+    if (e.target.closest && e.target.closest('button')) return;
+    e.preventDefault();
+    if (state === 'quiz') { if (answered) closeQuiz(); return; }
+    if (state === 'over') { if (performance.now() - overAt > 900) restart(); return; }
+    act();
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  $('again').addEventListener('click', () => { ensureAudio(); restart(); });
+  reviveBtn.addEventListener('click', () => {
+    if (state !== 'over' || reviveUsed) return;
+    ensureAudio(); hideSheet();
+    setTimeout(() => { if (state === 'over') openQuiz('revive'); }, 300);
+  });
+  $('copy').addEventListener('click', async () => {
+    const btn = $('copy'), m = score * METERS;
+    const passed = LANDMARKS.filter((L) => m > L.m).pop();
+    const text = `하늘까지 탑 쌓기에서 ${score}층(${m.toLocaleString()}m)까지 쌓았어요!`
+      + (passed ? ` ${passed.name}보다 높아요.` : '')
+      + (quizTotal ? ` 문제는 ${quizTotal}개 중 ${quizRight}개 맞혔어요.` : '');
+    try { await navigator.clipboard.writeText(text); btn.textContent = '복사했어요'; }
+    catch (err) { btn.textContent = '복사가 막혔어요'; }
+    setTimeout(() => { btn.textContent = '기록 복사'; }, 1600);
+  });
+  window.addEventListener('resize', resize);
+
+  function frame(t) {
+    const dt = Math.min(0.05, Math.max(0, (t - last) / 1000));
+    last = t; time += dt;
+    update(dt); render(dt);
+    requestAnimationFrame(frame);
+  }
+
+  window.claude?.hot?.snapshot(() => ({ best }));
+  function boot(data) {
+    best = Math.max(+store.get('sky-stack-best', '0') || 0, (data && +data.best) || 0);
+    introBest.textContent = best > 0 ? `최고 기록 ${best}층` : '첫 기록에 도전해 보세요';
+    sheet.inert = true; quizEl.inert = true;
+    renderMute(); renderSetup();
+    resize(); makeSky(); reset();
+    requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
+  }
+  window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body>
+</html>
